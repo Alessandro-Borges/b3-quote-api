@@ -12,6 +12,7 @@ Autor: Alessandro Dias Borges
 
 import logging
 import re
+import time
 from datetime import datetime, timezone
 
 # NOTE (security): SSL verification bypass used during troubleshooting was moved
@@ -115,36 +116,85 @@ def normalize_ticker(ticker: str) -> tuple[str, str]:
 def fetch_quote(yahoo_symbol: str) -> dict:
     """
     Busca a cotação no Yahoo Finance via yfinance.
-    Levanta HTTPException 404 se o ticker não existir,
-    ou 502 se houver falha de comunicação com a fonte de dados.
-    """
-    try:
-        asset = yf.Ticker(yahoo_symbol)
-        # fast_info é mais leve e rápido que .info
-        info = asset.fast_info
-        try:
-            price = info.get("lastPrice") or info.get("last_price")
-        except Exception:
-            # Algumas versões do yfinance levantam exceção para ticker inexistente
-            price = None
-    except ConnectionError as exc:  # falha de rede / API externa
-        logger.error("Erro de conexão com Yahoo Finance para %s: %s", yahoo_symbol, exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Falha ao consultar a fonte de dados (Yahoo Finance). Tente novamente.",
-        ) from exc
-    except Exception as exc:
-        logger.error("Erro ao consultar Yahoo Finance para %s: %s", yahoo_symbol, exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Falha ao consultar a fonte de dados (Yahoo Finance). Tente novamente.",
-        ) from exc
 
-    if price is None:
+    Estratégia:
+    - tenta 3 vezes com backoff simples em caso de rate-limit / erro intermitente
+    - se o upstream responder sem dados ou continuar falhando, retorna 502
+    - 404 continua reservado para ticker realmente inválido ou inexistente
+    """
+    max_attempts = 3
+    retry_delay_seconds = 1.5
+    last_exc = None
+    last_info = None
+    last_asset = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            asset = yf.Ticker(yahoo_symbol)
+            info = asset.fast_info
+            last_asset = asset
+            last_info = info
+
+            try:
+                price = info.get("lastPrice") or info.get("last_price")
+            except Exception:
+                # Algumas versões do yfinance levantam exceção para ticker inexistente
+                price = None
+
+            if price is not None:
+                break
+
+            logger.warning(
+                "Yahoo retornou dados vazios para %s na tentativa %s/%s",
+                yahoo_symbol,
+                attempt,
+                max_attempts,
+            )
+
+            if attempt < max_attempts:
+                time.sleep(retry_delay_seconds * attempt)
+                continue
+
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Serviço de dados temporariamente indisponível. "
+                    "O Yahoo Finance respondeu sem dados válidos para este ticker."
+                ),
+            )
+
+        except HTTPException:
+            raise
+        except ConnectionError as exc:  # falha de rede / API externa
+            last_exc = exc
+            logger.warning(
+                "Tentativa %s/%s falhou para %s (conexão): %s",
+                attempt,
+                max_attempts,
+                yahoo_symbol,
+                exc,
+            )
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                "Tentativa %s/%s falhou para %s: %s",
+                attempt,
+                max_attempts,
+                yahoo_symbol,
+                exc,
+            )
+
+        if attempt < max_attempts:
+            time.sleep(retry_delay_seconds * attempt)
+            continue
+
         raise HTTPException(
-            status_code=404,
-            detail=f"Ticker '{yahoo_symbol.removesuffix('.SA')}' não encontrado na B3.",
-        )
+            status_code=502,
+            detail="Falha ao consultar a fonte de dados (Yahoo Finance). Tente novamente.",
+        ) from last_exc
+
+    info = last_info
+    asset = last_asset
 
     # Metadados adicionais (nome da empresa, estado do mercado)
     name = None
@@ -171,7 +221,8 @@ def fetch_quote(yahoo_symbol: str) -> dict:
     previous_close = safe_get("previousClose", "previous_close")
     change = None
     change_percent = None
-    if previous_close:
+    price = safe_get("lastPrice", "last_price")
+    if price is not None and previous_close:
         change = round(price - previous_close, 4)
         change_percent = round((price - previous_close) / previous_close * 100, 4)
 
@@ -180,7 +231,7 @@ def fetch_quote(yahoo_symbol: str) -> dict:
     return {
         "name": name,
         "currency": safe_get("currency"),
-        "price": round(price, 4),
+        "price": round(price, 4) if price is not None else None,
         "previous_close": round(previous_close, 4) if previous_close else None,
         "change": change,
         "change_percent": change_percent,

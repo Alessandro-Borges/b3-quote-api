@@ -167,7 +167,7 @@ Com a API rodando, abra **outro terminal** e teste:
 curl http://localhost:8000/health
 curl http://localhost:8000/api/v1/quote/PETR4
 ```
-
+S
 ```powershell
 # Windows (PowerShell) — use curl.exe, pois "curl" puro é um alias do PowerShell
 curl.exe http://localhost:8000/health
@@ -219,11 +219,21 @@ docker compose down            # para e remove quando terminar
 ### 2.1 Pré-requisitos na OCI
 
 1. VM criada (shape gratuito `VM.Standard.E2.1.Micro` ou `VM.Standard.A1.Flex` funciona bem) com **Ubuntu 22.04/24.04**.
-2. Chave SSH configurada. Conecte-se:
+2. Chave SSH configurada. Se o arquivo estiver dentro da pasta do projeto, use este comando:
 
 ```bash
-ssh -i ~/.ssh/sua_chave.pem ubuntu@IP_PUBLICO_DA_VM
+chmod 600 ssh-key-2026-03-14.key
+ssh -i "$PWD/ssh-key-2026-03-14.key" ubuntu@146.235.57.116
 ```
+
+Se estiver em `~/.ssh/`, use:
+
+```bash
+chmod 600 ~/.ssh/ssh-key-2026-03-14.key
+ssh -i ~/.ssh/ssh-key-2026-03-14.key ubuntu@146.235.57.116
+```
+
+> O usuário padrão da VM Ubuntu da OCI costuma ser `ubuntu`. Se a sua VM usar outro nome de usuário, troque `ubuntu` pelo nome correto.
 
 ### 2.2 Configuração do Firewall (obrigatório — 2 camadas)
 
@@ -251,7 +261,13 @@ As imagens Ubuntu da OCI vêm com regras `iptables` restritivas por padrão:
 
 ```bash
 # Libera a porta 8000 (insere ANTES da regra de REJECT padrão da OCI)
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT
+##sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT esse comando deu erro
+
+sudo iptables -I INPUT -p tcp --dport 8000 -m state --state NEW -j ACCEPT
+
+# verificar se foi add
+
+sudo iptables -L INPUT --line-numbers -n -v
 
 # Persiste as regras entre reboots
 sudo apt-get update && sudo apt-get install -y iptables-persistent
