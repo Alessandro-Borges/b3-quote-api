@@ -412,68 +412,64 @@ curl http://localhost:8000/health
 docker compose restart               # reiniciar
 docker compose down                  # parar e remover
 git pull && docker compose up -d --build   # atualizar versão
-**Se você tiver problema de certificado SSL local (ex: sua rede corporativa faz interceptação SSL):**
+## 🔐 O que é SSL e o que é uma CA? (explicação simples)
 
-- Durante testes locais, configure o container para aceitar seu CA corporativo montando o certificado PEM na pasta `/usr/local/share/ca-certificates/` do container e reconstruindo a imagem (ou adicione o CA na VM antes de rodar o container). Exemplo (recomendado):
+SSL é o mecanismo que protege a conexão entre o seu navegador ou código e um site/serviço na internet. Em linguagem simples: é como uma "capa de segurança" para os dados que trafegam.
 
-```bash
-# coloque company-ca.pem na raiz do projeto
-docker build --build-arg ADDITIONAL_CA=company-ca.pem -t b3-quote-api:local .
-docker compose up -d --build
-```
+A CA (Certificate Authority, ou Autoridade Certificadora) é a entidade que emite e valida esse "documento digital". É como uma empresa que confirma: "este site é realmente quem diz que é".
 
-Ou, mais simples para testes rápidos, execute o container montando o CA e atualizando as CAs no entrypoint:
+Quando o seu computador diz que um certificado é inválido, normalmente o problema é um destes casos:
 
-```bash
-docker run -d --name b3-quote-api -p 8000:8000 \
-  -v $(pwd)/company-ca.pem:/usr/local/share/ca-certificates/company-ca.crt:ro \
-  b3-quote-api:latest /bin/sh -c "update-ca-certificates && uvicorn main:app --host 0.0.0.0 --port 8000"
-```
+- o site usa um certificado antigo ou mal configurado;
+- a sua rede está interceptando o tráfego com um certificado da empresa e o seu computador não conhece essa autoridade;
+- a máquina local está em um ambiente corporativo com política de segurança mais rígida.
 
-> Atenção: montar um CA corporativo dentro do container só faz sentido para testes — em produção prefira atualizar a imagem base com o CA ou configurar a VM/infra corretamente.
+Nas máquinas da OCI e em um servidor Ubuntu normal, isso quase nunca é um problema, porque o sistema já vem com as CAs públicas conhecidas instaladas.
 
----
+O problema costuma aparecer mais em notebooks corporativos, porque a empresa pode ter um proxy ou uma política de segurança que substitui certificados HTTPS por certificados internos.
 
-## 🔐 Causa comum: certificados interceptados pela rede da empresa
+Em resumo: uma CA é um "emissor de identidade digital" para HTTPS. Quando seu computador não a reconhece, o Python ou o navegador bloqueia a conexão por segurança.
 
-Se a sua máquina local (macOS) pertence a uma rede corporativa, é comum que o tráfego HTTPS seja interceptado por um proxy que usa um certificado **self-signed** ou emitido por uma CA interna. Nesses casos:
+### Quando isso importa aqui?
 
-- No seu computador da empresa você precisa do arquivo PEM do CA da empresa para confiar nas conexões.
-- Em uma VM pública (OCI) normalmente esse problema não aparece — a VM usa o conjunto de CAs públicas e, desde que não haja um proxy corporativo entre a VM e a Internet, o `yfinance` funcionará normalmente.
-
-Se for necessário adicionar o CA da empresa à VM Ubuntu (recomendado para deploy quando a empresa exige inspeção SSL), faça:
-
-```bash
-# copie o arquivo company-ca.pem para a VM (ex: /tmp/company-ca.pem)
-sudo cp /tmp/company-ca.pem /usr/local/share/ca-certificates/company-ca.crt
-sudo update-ca-certificates
-# reinicie o serviço (ou o container) que usa SSL
-```
+- Em um notebook da empresa ou rede corporativa: pode acontecer.
+- Em uma VM pública na Oracle Cloud: normalmente não precisa de configuração extra.
+- Para desenvolvimento local, quando isso acontece, pode ser útil testar com `main_dev.py` — mas só para depuração local e não em produção.
 
 ---
 
-## 🔁 O que eu alterei no projeto para facilitar testes locais
+## 🔁 O que foi ajustado no projeto
 
-- `main.py`: adicionei um `DEV_INSECURE_SSL` controlado por variável de ambiente. **Somente para desenvolvimento** — quando `DEV_INSECURE_SSL=1` o processo Python desabilita a verificação SSL (apenas local). Não use em produção.
-- `Dockerfile`: instala `ca-certificates` no runtime para garantir que containers confiem nas CAs públicas.
-- `docker-compose.yml`: documenta `DEV_INSECURE_SSL` e explica como montar um CA dentro do container para testes.
+- `main.py` foi mantido em modo produção, sem bypass de SSL.
+- `main_dev.py` foi criado como arquivo específico para testes locais, com verificação SSL desativada apenas para o processo local.
+- `Dockerfile` foi ajustado para instalar `ca-certificates`, ajudando containers a confiar nas CAs públicas do ambiente.
+- `deploy_vm.sh` foi adicionado para facilitar o deploy em VM Ubuntu.
 
-Exemplo de uso (apenas para DEBUG/local):
+### Como usar para depuração local (somente local)
 
 ```bash
-# start local server with insecure SSL bypass (development ONLY)
-DEV_INSECURE_SSL=1 PYTHONHTTPSVERIFY=0 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# ative o venv antes, se aplicável
+source .venv/bin/activate
+python main_dev.py
 ```
+
+Isso baixa a verificação de certificado só para esse processo local. Em produção, use o `main.py` normal e isso não deve ser ativado.
 
 ---
 
-## ✅ Recomendações finais (passo-a-passo simples)
+## ✅ Recomendações finais
 
-1. Teste localmente em um ambiente limpo (crie um venv `python3.12 -m venv .venv` e ative). Se a sua máquina for corporativa e apresentar erro SSL, use Docker com o CA montado (conforme instruções acima) ou ative `DEV_INSECURE_SSL` temporariamente apenas para testar.
-2. Para deploy na VM (OCI), prefira instalar Python 3.12 e rodar com `systemd` (opção A) ou, preferencialmente, use Docker (opção B). Em uma VM pública não corporativa não deverá ocorrer o erro de certificado.
-3. Se a sua organização intercepta HTTPS, obtenha o arquivo PEM do CA e adicione-o à VM com `update-ca-certificates`.
+1. Use `main.py` e `uvicorn main:app --host 0.0.0.0 --port 8000 --reload` para produção e deploy normal.
+2. Use `main_dev.py` somente se o seu notebook estiver atrás de proxy corporativo e a rede estiver emitindo certificados internos.
+3. Em uma VM Ubuntu da OCI, normalmente não é necessário mexer em CA, porque ela já entende as autoridades públicas. O problema real costuma ser a máquina local da empresa, não a VM.
 
-Se quiser, eu gero agora um `deploy_vm.sh` com todos os comandos prontos para colar na VM e um `docker/Dockerfile` alternativo que inclui passo de cópia de CA quando presente. Quer que eu faça isso agora? 
+---
+
+## 🔍 Resumo prático
+
+- Se estiver no notebook da empresa e o Yahoo estiver sendo interceptado: pode ser problema de CA local.
+- Se estiver na VM Ubuntu na OCI: normalmente não precisa de nada.
+- Em produção: nunca desative SSL. Use o fluxo normal e os certificados válidos.
 
 Abra no navegador:
 
