@@ -12,18 +12,13 @@ Autor: Alessandro Dias Borges
 
 import logging
 import re
-import os
-import ssl
 from datetime import datetime, timezone
 
-# Development-only: allow disabling SSL verification when running locally
-# Set environment variable DEV_INSECURE_SSL=1 before starting uvicorn to enable.
-# This change was added to help local developers who are behind corporate proxies
-# that perform SSL interception. It is safe only for local testing — do NOT enable
-# in production environments.
-if os.environ.get("DEV_INSECURE_SSL") == "1":
-    # WARNING: disables SSL verification globally for this Python process.
-    ssl._create_default_https_context = ssl._create_unverified_context
+# NOTE (security): SSL verification bypass used during troubleshooting was moved
+# to a separate helper `main_dev.py`. Do NOT enable SSL verification bypass in
+# production. To test locally when behind a corporate proxy that intercepts TLS,
+# run `python main_dev.py` which temporarily disables certificate verification
+# for that local process only.
 
 import yfinance as yf
 from fastapi import FastAPI, HTTPException, Path

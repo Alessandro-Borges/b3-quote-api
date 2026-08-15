@@ -182,6 +182,20 @@ Ou simplesmente abra o navegador em: <http://localhost:8000/docs>
 
 Para parar a API: `Ctrl+C` no terminal onde ela está rodando.
 
+### 1.4b Rodando em modo de depuração SSL (apenas local)
+
+Se a sua máquina estiver atrás de um proxy corporativo que intercepta HTTPS, você pode precisar desabilitar a verificação SSL _apenas para testes locais_. Para isso criamos `main_dev.py` que desabilita a verificação SSL apenas para o processo local.
+
+Use somente para depuração local — NÃO use em produção.
+
+```bash
+# ative o venv antes, se aplicável
+source .venv/bin/activate
+python main_dev.py
+```
+
+Isso executa a mesma API (`app` do `main.py`) com a verificação de certificado desativada só para o processo local.
+
 ### 1.5 Testando com Docker no Windows (opcional)
 
 Se quiser testar a versão containerizada no seu PC antes do deploy:
