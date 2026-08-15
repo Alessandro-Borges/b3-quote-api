@@ -1,0 +1,40 @@
+# Python virtual environments
+.venv/
+.venv312/
+venv/
+env/
+
+# Python cache / local artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environment files
+.env
+.env.*
+
+# SSH keys and secrets
+*.pem
+*.key
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.pub
+.ssh/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Docker local data
+.docker/
+
+# Logs
+*.log
