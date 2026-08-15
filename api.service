@@ -1,0 +1,39 @@
+# =============================================================================
+# api.service — unidade systemd para a B3 Quote API (Opção A: deploy direto)
+#
+# Instalação:
+#   sudo cp api.service /etc/systemd/system/api.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now api
+#
+# Pressupõe que o projeto foi clonado em /home/ubuntu/b3-quote-api
+# e que o venv foi criado em /home/ubuntu/b3-quote-api/venv
+# =============================================================================
+
+[Unit]
+Description=B3 Quote API (FastAPI + Uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/b3-quote-api
+Environment="TZ=America/Sao_Paulo"
+ExecStart=/home/ubuntu/b3-quote-api/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+
+# Alta disponibilidade: reinicia sempre que o processo cair
+Restart=always
+RestartSec=5
+
+# Hardening básico
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logs vão para o journald (ver com: journalctl -u api -f)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+# =============================================================================
+# docker-compose.yml — B3 Quote API
+# Sobe a API com um único comando: docker compose up -d
+# =============================================================================
+services:
+  api:
+    build: .
+    image: b3-quote-api:latest
+    container_name: b3-quote-api
+    restart: always            # reinicia automaticamente após crash ou reboot da VM
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=America/Sao_Paulo
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"        # evita que os logs encham o disco da VM
+        max-file: "3"
