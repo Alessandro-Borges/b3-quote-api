@@ -12,6 +12,10 @@ services:
       - "8000:8000"
     environment:
       - TZ=America/Sao_Paulo
+      # For local development only you can enable the insecure SSL bypass:
+      # - DEV_INSECURE_SSL=1
+      # To add a custom CA into the running container (if your company intercepts SSL):
+      # mount the PEM at /usr/local/share/ca-certificates/company-ca.crt and rebuild/update CA.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s

@@ -398,69 +398,68 @@ curl http://localhost:8000/health
 docker compose restart               # reiniciar
 docker compose down                  # parar e remover
 git pull && docker compose up -d --build   # atualizar versão
+**Se você tiver problema de certificado SSL local (ex: sua rede corporativa faz interceptação SSL):**
+
+- Durante testes locais, configure o container para aceitar seu CA corporativo montando o certificado PEM na pasta `/usr/local/share/ca-certificates/` do container e reconstruindo a imagem (ou adicione o CA na VM antes de rodar o container). Exemplo (recomendado):
+
+```bash
+# coloque company-ca.pem na raiz do projeto
+docker build --build-arg ADDITIONAL_CA=company-ca.pem -t b3-quote-api:local .
+docker compose up -d --build
+```
+
+Ou, mais simples para testes rápidos, execute o container montando o CA e atualizando as CAs no entrypoint:
+
+```bash
+docker run -d --name b3-quote-api -p 8000:8000 \
+  -v $(pwd)/company-ca.pem:/usr/local/share/ca-certificates/company-ca.crt:ro \
+  b3-quote-api:latest /bin/sh -c "update-ca-certificates && uvicorn main:app --host 0.0.0.0 --port 8000"
+```
+
+> Atenção: montar um CA corporativo dentro do container só faz sentido para testes — em produção prefira atualizar a imagem base com o CA ou configurar a VM/infra corretamente.
+
+---
+
+## 🔐 Causa comum: certificados interceptados pela rede da empresa
+
+Se a sua máquina local (macOS) pertence a uma rede corporativa, é comum que o tráfego HTTPS seja interceptado por um proxy que usa um certificado **self-signed** ou emitido por uma CA interna. Nesses casos:
+
+- No seu computador da empresa você precisa do arquivo PEM do CA da empresa para confiar nas conexões.
+- Em uma VM pública (OCI) normalmente esse problema não aparece — a VM usa o conjunto de CAs públicas e, desde que não haja um proxy corporativo entre a VM e a Internet, o `yfinance` funcionará normalmente.
+
+Se for necessário adicionar o CA da empresa à VM Ubuntu (recomendado para deploy quando a empresa exige inspeção SSL), faça:
+
+```bash
+# copie o arquivo company-ca.pem para a VM (ex: /tmp/company-ca.pem)
+sudo cp /tmp/company-ca.pem /usr/local/share/ca-certificates/company-ca.crt
+sudo update-ca-certificates
+# reinicie o serviço (ou o container) que usa SSL
 ```
 
 ---
 
-## 🧪 3. Exemplos de uso
+## 🔁 O que eu alterei no projeto para facilitar testes locais
 
-Substitua `IP_PUBLICO_DA_VM` pelo IP público da sua instância OCI.
+- `main.py`: adicionei um `DEV_INSECURE_SSL` controlado por variável de ambiente. **Somente para desenvolvimento** — quando `DEV_INSECURE_SSL=1` o processo Python desabilita a verificação SSL (apenas local). Não use em produção.
+- `Dockerfile`: instala `ca-certificates` no runtime para garantir que containers confiem nas CAs públicas.
+- `docker-compose.yml`: documenta `DEV_INSECURE_SSL` e explica como montar um CA dentro do container para testes.
 
-> 💡 **Testando a partir do Windows:** no PowerShell, use `curl.exe` no lugar de `curl` (o `curl` puro é um alias de `Invoke-WebRequest` e tem sintaxe diferente), ou use `Invoke-RestMethod http://IP_PUBLICO_DA_VM:8000/health`.
-
-### Health check
-
-```bash
-curl http://IP_PUBLICO_DA_VM:8000/health
-```
-
-```json
-{
-  "status": "ok",
-  "service": "b3-quote-api",
-  "timestamp": "2026-08-14T14:32:10.123456+00:00"
-}
-```
-
-### Cotação — Petrobras (PETR4)
+Exemplo de uso (apenas para DEBUG/local):
 
 ```bash
-curl http://IP_PUBLICO_DA_VM:8000/api/v1/quote/PETR4
+# start local server with insecure SSL bypass (development ONLY)
+DEV_INSECURE_SSL=1 PYTHONHTTPSVERIFY=0 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-```json
-{
-  "ticker": "PETR4",
-  "yahoo_symbol": "PETR4.SA",
-  "name": "Petróleo Brasileiro S.A. - Petrobras",
-  "currency": "BRL",
-  "price": 38.42,
-  "previous_close": 38.10,
-  "change": 0.32,
-  "change_percent": 0.84,
-  "day_high": 38.75,
-  "day_low": 38.01,
-  "volume": 45879300,
-  "market_state": "OPEN",
-  "timestamp": "2026-08-14T14:32:10.123456+00:00"
-}
-```
+---
 
-### Outros exemplos
+## ✅ Recomendações finais (passo-a-passo simples)
 
-```bash
-curl http://IP_PUBLICO_DA_VM:8000/api/v1/quote/VALE3   # Vale
-curl http://IP_PUBLICO_DA_VM:8000/api/v1/quote/ITUB4   # Itaú
-curl http://IP_PUBLICO_DA_VM:8000/api/v1/quote/BBAS3   # Banco do Brasil
+1. Teste localmente em um ambiente limpo (crie um venv `python3.12 -m venv .venv` e ative). Se a sua máquina for corporativa e apresentar erro SSL, use Docker com o CA montado (conforme instruções acima) ou ative `DEV_INSECURE_SSL` temporariamente apenas para testar.
+2. Para deploy na VM (OCI), prefira instalar Python 3.12 e rodar com `systemd` (opção A) ou, preferencialmente, use Docker (opção B). Em uma VM pública não corporativa não deverá ocorrer o erro de certificado.
+3. Se a sua organização intercepta HTTPS, obtenha o arquivo PEM do CA e adicione-o à VM com `update-ca-certificates`.
 
-# Ticker inexistente -> HTTP 404
-curl -i http://IP_PUBLICO_DA_VM:8000/api/v1/quote/XXXX9
-
-# Formato inválido -> HTTP 422
-curl -i http://IP_PUBLICO_DA_VM:8000/api/v1/quote/AB
-```
-
-### Swagger UI
+Se quiser, eu gero agora um `deploy_vm.sh` com todos os comandos prontos para colar na VM e um `docker/Dockerfile` alternativo que inclui passo de cópia de CA quando presente. Quer que eu faça isso agora? 
 
 Abra no navegador:
 

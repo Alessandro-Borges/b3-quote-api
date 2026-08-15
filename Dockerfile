@@ -28,7 +28,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # curl é necessário apenas para o HEALTHCHECK
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copia as dependências instaladas no estágio builder
