@@ -82,11 +82,13 @@ git push -u origin main
 
 ## 🖥️ 1. Rodando localmente (testes)
 
-Pré-requisito: **Python 3.10+** instalado ([python.org/downloads](https://www.python.org/downloads/)).
+Pré-requisito: **Python 3.12+** instalado ([python.org/downloads](https://www.python.org/downloads/)).
 
+> ⚠️ **Nota macOS/Homebrew:** Instale Python com `brew install python@3.12`. Ao usar Homebrew, o Python é "externally managed", então é **obrigatório** criar um ambiente virtual (venv) antes de instalar as dependências com `pip`.
+>
 > 💡 No Windows, durante a instalação do Python, marque a opção **"Add Python to PATH"**.
 
-### 1.1 Linux / macOS
+### 1.1 Linux
 
 ```bash
 # 1. Clone o repositório
@@ -104,7 +106,31 @@ pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 1.2 Windows (PowerShell)
+### 1.1b macOS (Homebrew)
+
+```bash
+# 1. Clone o repositório
+git clone https://github.com/SEU_USUARIO/b3-quote-api.git
+cd b3-quote-api
+
+# 2. Instale Python 3.12 via Homebrew (se não estiver instalado)
+brew install python@3.12
+
+# 3. Crie e ative o ambiente virtual com Python 3.12
+python3.12 -m venv venv
+source venv/bin/activate
+
+# 4. Atualize o pip e instale as dependências
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 5. Execute a API
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+> Se receber erro `error: externally-managed-environment`, é porque o Python do Homebrew é gerenciado externamente. A solução é **sempre usar um venv** (passos 3–4 acima).
+
+### 1.3 Windows (PowerShell)
 
 Abra o **PowerShell** (não precisa ser como administrador) e execute:
 
@@ -132,7 +158,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 *Se preferir o Prompt de Comando (CMD), o passo 3 muda para:* `venv\Scripts\activate.bat`
 
-### 1.3 Testando localmente
+### 1.4 Testando localmente
 
 Com a API rodando, abra **outro terminal** e teste:
 
@@ -156,7 +182,7 @@ Ou simplesmente abra o navegador em: <http://localhost:8000/docs>
 
 Para parar a API: `Ctrl+C` no terminal onde ela está rodando.
 
-### 1.4 Testando com Docker no Windows (opcional)
+### 1.5 Testando com Docker no Windows (opcional)
 
 Se quiser testar a versão containerizada no seu PC antes do deploy:
 
